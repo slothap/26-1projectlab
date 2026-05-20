@@ -116,7 +116,7 @@ while True:
         member_id = get_member_id(current_user_id)
         history = member_history.get(member_id, [])
         
-        if len(history) < 2: #3->2이어도 충분
+        if len(history) < 4: #누적 사용 횟수가 3회 이하면 편차 도출이 무의미하기에 Global 평균과 표준편차를 기준으로 작동함
             current_mu = GLOBAL_MU
             current_sigma = GLOBAL_SIGMA
             stat_type = "G"

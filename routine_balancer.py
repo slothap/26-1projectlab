@@ -51,8 +51,11 @@ def route_next_equipment(user_routine, equipment_stats):
         prob = (1.0 / cost) / inverse_costs_sum
         probabilities[equip_id] = prob
         
-    # 3. 가장 높은 확률을 가진 기구를 추천함
-    recommended_equip = max(probabilities, key=probabilities.get)
+    # 3. 기구를 추천함 (cost가 낮을 수록 추천될 확률이 상승함)
+    # ex) 5명 중 3명은 60% 확률을 가진 기구로, 1명은 30% 확률을 가진 기구로 자연스럽게 동선이 찢어짐.
+    equipments = list(probabilities.keys())
+    weights = list(probabilities.values())
+    recommended_equip = random.choices(equipments, weights=weights, k=1)[0]
     
     # Cost 값도 출력하기 위해 같이 반환하도록 수정
     return recommended_equip, probabilities, routine_costs
