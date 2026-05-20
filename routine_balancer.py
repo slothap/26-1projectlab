@@ -5,18 +5,19 @@ def calculate_dynamic_cost(t, mu, sigma, D):
     """
     특정 기구의 대기 비용(Cost)을 산출하는 함수
     """
-    # 이상치 페널티 시작점: T_off
-    t_off = mu + 1.645 * sigma 
+    # 통계적 임계점 계산
+    t_70 = mu + 0.524 * sigma  # 누적 확률 70% 지점 (노란색 점등)
+    t_95 = mu + 1.645 * sigma  # 누적 확률 95% 지점 (이상치 강등)
     
-    # wait 계산
-    if t < mu:
-        # 정상 구간: 최소 1분 보장
-        t_wait = max((mu - t), 1)
-    elif mu <= t < t_off:
-        # 종료 임박 구간
-        t_wait = max((t_off - t), 1)
+    # 구간별 wait 계산 (수정된 수식 적용)
+    if 0 <= t < t_70:
+        # 1구간: 정상 이용 (T_70 기준 잔여 시간)
+        t_wait = max((t_70 - t), 1)
+    elif t_70 <= t < t_95:
+        # 2구간: 종료 임박 (T_95 기준 잔여 시간)
+        t_wait = max((t_95 - t), 1)
     else:
-        # 예상 불가(이상치 페널티) 구간: 통계적 배제
+        # 3구간: 예상 불가 이상치 (강력한 페널티 부여)
         t_wait = mu * 3 
         
     # 최종 혼잡도 비용 함수
@@ -25,12 +26,12 @@ def calculate_dynamic_cost(t, mu, sigma, D):
 
 def route_next_equipment(user_routine, equipment_stats):
     """
-    개인의 남은 운동 루틴을 바탕/ 역수 비례 가중치를 적용하여 최적 기구 추천
+    개인의 남은 운동 루틴을 바탕으로 역수 비례 가중치를 적용하여 최적 기구 추천
     """
     routine_costs = {}
     inverse_costs_sum = 0.0
     
-    # 1. 사용자의 남은 루틴에 속한 기구들의 Cost 산출 및 역수 합계 계산 0
+    # 1. 사용자의 남은 루틴에 속한 기구들의 Cost 산출 및 역수 합계 계산
     for equip_id in user_routine:
         stats = equipment_stats.get(equip_id)
         if not stats:
@@ -51,13 +52,12 @@ def route_next_equipment(user_routine, equipment_stats):
         prob = (1.0 / cost) / inverse_costs_sum
         probabilities[equip_id] = prob
         
-    # 3. 기구를 추천함 (cost가 낮을 수록 추천될 확률이 상승함)
-    # ex) 5명 중 3명은 60% 확률을 가진 기구로, 1명은 30% 확률을 가진 기구로 자연스럽게 동선이 찢어짐.
+    # 3. 산출된 확률(Prob)을 가중치로 삼아 룰렛 돌리기
     equipments = list(probabilities.keys())
     weights = list(probabilities.values())
+    
     recommended_equip = random.choices(equipments, weights=weights, k=1)[0]
     
-    # Cost 값도 출력하기 위해 같이 반환하도록 수정
     return recommended_equip, probabilities, routine_costs
 
 # 랜덤 값 기반 추천 진행
@@ -68,10 +68,10 @@ if __name__ == "__main__":
     # 기구별 상태 데이터를 랜덤으로 생성
     gym_equipment_status = {}
     for equip in equipment_list:
-        mu_val = random.randint(10, 25)              # 평균 이용 시간: 10~25 무작위
-        sigma_val = random.randint(2, 6)             # 표준편차: 2~6 무작위
-        t_val = random.randint(0, mu_val + 10)       # 현재 사용 시간 (빈 기구부터 예상초과까지 다양하게)
-        demand_val = random.randint(0, 4)            # 대기 수요: 0~4명 무작위
+        mu_val = random.randint(10, 25)              # 평균 이용 시간
+        sigma_val = random.randint(2, 6)             # 표준편차
+        t_val = random.randint(0, mu_val + 10)       # 현재 사용 시간
+        demand_val = random.randint(0, 4)            # 대기 수요
         
         gym_equipment_status[equip] = {
             'current_t': t_val,
@@ -80,7 +80,7 @@ if __name__ == "__main__":
             'demand': demand_val
         }
         
-    # 2. 생성된 랜덤 값 화면에 출력
+    # 생성된 랜덤 값 화면에 출력
     print("=" * 60)
     print("   [ 현재 헬스장 기구 점유 상태 (랜덤 생성) ]")
     print("=" * 60)
@@ -88,12 +88,14 @@ if __name__ == "__main__":
         print(f" 기구: {equip:15} | 사용(t): {stats['current_t']:2d} | 평균(mu): {stats['mu']:2d} | 편차(sigma): {stats['sigma']:2d} | 대기(D): {stats['demand']:2d}")
     print("-" * 60)
     
-    # 3.사용자의 남은 루틴 (전체 기구 중 3개를 무작위로 뽑기)
+    # 사용자의 남은 루틴 (전체 기구 중 3개를 무작위로 뽑기)
     my_remaining_routine = random.sample(equipment_list, 3)
     print(f"\n나의 남은 운동 루틴: {my_remaining_routine}\n")
-    # 4. 알고리즘 실행
+    
+    # 알고리즘 실행
     recommendation, probs, costs = route_next_equipment(my_remaining_routine, gym_equipment_status)
-    # 5. 결과 출력
+    
+    # 결과 출력
     print("--- [ 루틴 내 기구별 Cost 및 추천 확률 분석 ] ---")
     for equip in my_remaining_routine:
         cost = costs[equip]
